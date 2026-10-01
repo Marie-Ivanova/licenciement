@@ -25,7 +25,7 @@ textarea{resize:vertical;min-height:38px}
 button{font:inherit;cursor:pointer;border-radius:3px;padding:9px 14px;border:1px solid var(--navy);background:#fff;color:var(--navy)}
 button.main{background:var(--wine);border-color:var(--wine);color:#fff;width:100%;font-weight:600;margin-top:18px;padding:12px}
 button.link{border:0;background:none;color:var(--wine);padding:4px 0;text-decoration:underline}
-#sigTxt{font-family:"Caveat","Segoe Script","Brush Script MT",cursive;font-size:22px}
+#sigTxt{font-family:Arial,sans-serif}
 small{color:#666}
 #paper{background:#fff;border:1px solid var(--line);box-shadow:0 1px 6px rgba(0,0,0,.08);max-width:640px;width:100%;margin:0 auto;aspect-ratio:.707;overflow:hidden;container-type:inline-size}
 #paper img{display:block;width:100%}
@@ -34,7 +34,7 @@ small{color:#666}
 #doc .gap{margin-top:3cqw}
 #doc .n{font-size:1.7cqw;margin:0 0 1.2cqw}
 #doc .b{margin:0 0 1.2cqw 5cqw;font-size:1.7cqw}
-#doc .sig{text-align:right;margin-top:5cqw;font-family:"Caveat","Segoe Script","Brush Script MT",cursive;font-size:4cqw}
+#doc .sig{margin-top:5cqw;font-family:Arial,sans-serif;font-size:2.15cqw}
 #doc .sig img{max-height:9cqw;max-width:30cqw}
 </style>
 </head>
@@ -62,6 +62,8 @@ small{color:#666}
 
   <label for="sigTxt">Signature (texte)</label>
   <input id="sigTxt" value="Alex Ronbard">
+  <label for="sigPos">Position de la signature</label>
+  <select id="sigPos"><option value="left">À gauche</option><option value="center">Au centre</option><option value="right" selected>À droite</option></select>
   <label for="sigImg">ou image de signature</label>
   <input id="sigImg" type="file" accept="image/*">
   <small>La signature est mémorisée sur cet ordinateur et modifiable à tout moment.</small><br>
@@ -117,9 +119,9 @@ function render(){
   const m=model();
   let h=m.paras.map(p=>`<p${p.gap?' class="gap"':""}>${esc(p.t)}</p>`).join("");
   h+=m.notes.map(n=>`<p class="n">${esc(n.t)}</p>`+n.b.map(b=>`<p class="b">-&nbsp;&nbsp;&nbsp;&nbsp;${esc(b)}</p>`).join("")).join("");
-  h+=`<div class="sig">${sigData?`<img src="${sigData}" alt="Signature">`:esc($("sigTxt").value)}</div>`;
+  h+=`<div class="sig" style="text-align:${$("sigPos").value}">${sigData?`<img src="${sigData}" alt="Signature">`:esc($("sigTxt").value)}</div>`;
   $("doc").innerHTML=h;
-  try{localStorage.setItem("sa_sig",JSON.stringify({txt:$("sigTxt").value,img:sigData}))}catch(e){}
+  try{localStorage.setItem("sa_sig",JSON.stringify({txt:$("sigTxt").value,img:sigData,pos:$("sigPos").value}))}catch(e){}
 }
 
 async function build(){
@@ -137,8 +139,9 @@ async function build(){
   let sig;
   if(sigData){const[w,h]=await dim(sigData),H=70;
     sig=new D.ImageRun({type:sigData.includes("jpeg")?"jpg":"png",data:bin(sigData),transformation:{width:Math.round(H*w/h),height:H}});}
-  else sig=new D.TextRun({text:$("sigTxt").value,font:"Caveat",size:40});
-  kids.push(new D.Paragraph({alignment:D.AlignmentType.RIGHT,indent:{right:L+500},spacing:{before:700},children:[sig]}));
+  else sig=new D.TextRun({text:$("sigTxt").value,font:F,size:21});
+  const al={left:D.AlignmentType.LEFT,center:D.AlignmentType.CENTER,right:D.AlignmentType.RIGHT}[$("sigPos").value];
+  kids.push(new D.Paragraph({alignment:al,indent:{left:L,right:L},spacing:{before:700},children:[sig]}));
   const doc=new D.Document({sections:[{properties:{page:{size:{width:11906,height:16838},margin:{top:0,right:0,bottom:700,left:0}}},children:kids}]});
   const blob=await D.Packer.toBlob(doc);
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
@@ -149,7 +152,7 @@ async function build(){
 $("date").value=today();
 addArt("17","Obligations de l'employé","Exécuter ses missions");
 addArt("31","licenciement","inactivité");
-try{const s=JSON.parse(localStorage.getItem("sa_sig")||"null");if(s){$("sigTxt").value=s.txt||"";sigData=s.img||""}}catch(e){}
+try{const s=JSON.parse(localStorage.getItem("sa_sig")||"null");if(s){$("sigTxt").value=s.txt||"";sigData=s.img||"";if(s.pos)$("sigPos").value=s.pos}}catch(e){}
 $("add").onclick=()=>{addArt();render()};
 $("clr").onclick=()=>{sigData="";$("sigImg").value="";render()};
 $("sigImg").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{sigData=r.result;render()};r.readAsDataURL(f)};
