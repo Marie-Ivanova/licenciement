@@ -54,18 +54,24 @@ form{display:none}
   <div class="row">
     <div><label for="civ">S'adresse à</label>
       <select id="civ"><option>Monsieur</option><option>Madame</option></select></div>
-    <div><label for="date">Date de fin de contrat</label><input id="date" type="date"></div>
+    <div><label for="date">Date de la décision</label><input id="date" type="date"></div>
   </div>
   <div class="row">
     <div><label for="nom">Nom</label><input id="nom" value="Baskerville"></div>
     <div><label for="pre">Prénom</label><input id="pre" value="Rowan"></div>
   </div>
+  <label for="date2">Date de fin de contrat</label>
+  <input id="date2" type="date">
   <label for="h">Heures de service minimum (solde de tout compte)</label>
   <input id="h" type="number" min="0" value="10">
 
   <label>Articles du code du travail</label>
   <div id="arts"></div>
   <button type="button" class="link" id="add">Ajouter un article</button>
+
+  <label>Sections du code civil</label>
+  <div id="secs"></div>
+  <button type="button" class="link" id="addSec">Ajouter une section</button>
 
   <label for="sigTxt">Signature (texte)</label>
   <input id="sigTxt" value="Alex Ronbard">
@@ -96,50 +102,60 @@ const esc=s=>s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&qu
 const today=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
 const fmt=d=>d.split("-").reverse().join("/");
 
-function addArt(n="",t="",d=""){
+function addArt(n="",t="",d="",box=$("arts")){
   const e=document.createElement("div");e.className="art";
   e.innerHTML=`<div class="row"><div><label>N°</label><input class="n" value="${esc(n)}"></div><div><label>Intitulé</label><input class="t" value="${esc(t)}"></div></div>
   <label>Détails (une ligne par tiret)</label><textarea class="d" rows="1">${esc(d)}</textarea>
   <button type="button" class="link">Supprimer</button>`;
   e.querySelector("button").onclick=()=>{e.remove();render()};
-  $("arts").appendChild(e);
+  box.appendChild(e);
 }
-const arts=()=>[...document.querySelectorAll(".art")].map(r=>({n:r.querySelector(".n").value.trim(),t:r.querySelector(".t").value.trim(),d:r.querySelector(".d").value.split("\n").map(x=>x.trim()).filter(Boolean)})).filter(a=>a.n);
+const arts=(box=$("arts"))=>[...box.querySelectorAll(".art")].map(r=>({n:r.querySelector(".n").value.trim(),t:r.querySelector(".t").value.trim(),d:r.querySelector(".d").value.split("\n").map(x=>x.trim()).filter(Boolean)})).filter(a=>a.n);
 
 function model(){
   const civ=$("civ").value,nom=$("nom").value.trim()||"…",pre=$("pre").value.trim()||"…";
-  const date=fmt($("date").value||today()),A=arts();
-  const l=A.map(a=>`l'article ${a.n}*`);
-  const refs=l.length>1?l.slice(0,-1).join(", ")+" et "+l[l.length-1]:(l[0]||"…");
+  const d1=fmt($("date").value||today()),d2=fmt($("date2").value||$("date").value||today());
+  const A=arts(),S=arts($("secs")),T=t=>({t}),B=t=>({t,b:1});
+  const list=its=>its.reduce((o,it,i)=>[...o,T(i?(i===its.length-1?" et ":", "):""),...it],[]);
+  const aIt=A.map(a=>[B(`l'article ${a.n}`),T("*")]);
+  const sIt=S.map((a,i)=>i?[B(`section ${a.n}`),T("*")]:[T("la "),B(`section ${a.n}`),T("*")]);
+  const base="Cette décision fait suite à un manquement à vos obligations de travail";
+  let p3;
+  if(A.length){p3=[T(base+" comme l'a prévu "),...list(aIt),T(" du code du travail."+(S.length?" Mais également par ":""))];if(S.length)p3.push(...list(sIt),T(" du code civil."))}
+  else if(S.length)p3=[T(base+" comme l'a prévu "),...list(sIt),T(" du code civil.")];
+  else p3=[T(base+".")];
   return {
     paras:[
-      {t:`${civ} ${nom} ${pre},`},
-      {t:`Après avoir étudié attentivement votre situation au sein de l'entreprise, nous sommes au regret de vous informer de notre décision de mettre fin à votre contrat de travail à compter du ${date}.`},
-      {t:`Cette décision fait suite à un manquement à vos obligations de travail comme l'a prévu ${refs} du code du travail.`},
-      {t:`La direction a tenu une réunion préalable à cette décision conformément aux dispositions légales en vigueur, et a pris le temps d'examiner toutes les options possibles avant d'arriver à cette conclusion.`,gap:1},
-      {t:`Conformément à la législation applicable, votre contrat prendra fin le ${date}.`},
-      {t:`Vous avez droit à votre solde tout compte si vous avez effectué un minimum de ${$("h").value||0}h de service, conformément à la loi et aux accords en vigueur dans l'entreprise.`},
-      {t:`Nous restons disponibles pour toute question ou éclaircissement concernant cette procédure.`},
-      {t:`Nous vous prions d'agréer, ${civ} ${pre} ${nom}, l'expression de nos salutations distinguées.`}
+      {s:[T(`${civ} ${nom} ${pre},`)]},
+      {s:[T("Après avoir étudié attentivement votre situation au sein de l'entreprise, nous sommes au regret de vous informer de notre décision de mettre fin à votre contrat de travail à compter du "),B(d1),T(".")]},
+      {s:p3},
+      {s:[T("La direction a tenu une réunion préalable à cette décision conformément aux dispositions légales en vigueur, et a pris le temps d'examiner toutes les options possibles avant d'arriver à cette conclusion.")]},
+      {s:[T("Conformément à la législation applicable, votre contrat prendra fin le "),B(d2),T(".")]},
+      {s:[T(`Vous avez droit à votre solde tout compte si vous avez effectué un minimum de ${$("h").value||0}h de service, conformément à la loi et aux accords en vigueur dans l'entreprise.`)]},
+      {s:[T("Nous restons disponibles pour toute question ou éclaircissement concernant cette procédure.")]},
+      {s:[T(`Nous vous prions d'agréer, ${civ} ${pre} ${nom}, l'expression de nos salutations distinguées.`)]}
     ],
-    notes:A.map(a=>({t:`*article ${a.n} : ${a.t}${a.t?" :":""}`,b:a.d}))
+    notes:[...A.map(a=>({t:`*article ${a.n}${a.t?` : ${a.t} :`:""}`,b:a.d})),...S.map(a=>({t:`*section ${a.n}${a.t?` : ${a.t} :`:""}`,b:a.d}))]
   };
 }
 
 function render(){
   const m=model();
-  let h=m.paras.map(p=>`<p${p.gap?' class="gap"':""}>${esc(p.t)}</p>`).join("");
+  let h=m.paras.map(p=>`<p>${p.s.map(g=>g.b?`<b>${esc(g.t)}</b>`:esc(g.t)).join("")}</p>`).join("");
   h+=m.notes.map(n=>`<p class="n">${esc(n.t)}</p>`+n.b.map(b=>`<p class="b">-&nbsp;&nbsp;&nbsp;&nbsp;${esc(b)}</p>`).join("")).join("");
   h+=`<div class="sig" style="text-align:${$("sigPos").value}">${sigData?`<img src="${sigData}" alt="Signature">`:esc($("sigTxt").value)}</div>`;
   $("doc").innerHTML=h;
   try{localStorage.setItem("sa_sig",JSON.stringify({txt:$("sigTxt").value,img:sigData,pos:$("sigPos").value}))}catch(e){}
 }
 
-$("date").value=today();
+$("date").value=today();$("date2").value=today();let d2edited=false;
+$("date2").addEventListener("input",()=>{d2edited=true});
+$("date").addEventListener("input",()=>{if(!d2edited)$("date2").value=$("date").value});
 addArt("17","Obligations de l'employé","Exécuter ses missions");
 addArt("31","licenciement","inactivité");
 try{const s=JSON.parse(localStorage.getItem("sa_sig")||"null");if(s){$("sigTxt").value=s.txt||"";sigData=s.img||"";if(s.pos)$("sigPos").value=s.pos}}catch(e){}
 $("add").onclick=()=>{addArt();render()};
+$("addSec").onclick=()=>{addArt("","","",$("secs"));render()};
 $("clr").onclick=()=>{sigData="";$("sigImg").value="";render()};
 $("sigImg").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{sigData=r.result;render()};r.readAsDataURL(f)};
 $("f").addEventListener("input",render);
@@ -151,12 +167,23 @@ async function png(){
   x.drawImage(bi,0,0,W,bh);
   const X0=12.5*u,TW=75*u;let y=bh+6*u;
   const wrap=(t,s,ind=0)=>{
-    x.font=`${s*u}px Arial, sans-serif`;x.fillStyle="#111";
-    const lh=s*u*1.45,rows=[];let l="";
-    t.split(" ").forEach(k=>{const q=l?l+" "+k:k;if(l&&x.measureText(q).width>TW-ind){rows.push(l);l=k}else l=q});
-    rows.push(l);rows.forEach((r,i)=>x.fillText(r,X0+ind,y+i*lh));y+=rows.length*lh;
+    const lh=s*u*1.45,F=b=>`${b?"bold ":""}${s*u}px Arial, sans-serif`;x.fillStyle="#111";
+    if(typeof t==="string"){
+      x.font=F(0);const rows=[];let l="";
+      t.split(" ").forEach(k=>{const q=l?l+" "+k:k;if(l&&x.measureText(q).width>TW-ind){rows.push(l);l=k}else l=q});
+      rows.push(l);rows.forEach((r,i)=>x.fillText(r,X0+ind,y+i*lh));y+=rows.length*lh;return;
+    }
+    const U=[];let sp=true;
+    t.forEach(g=>(g.t.match(/\S+|\s+/g)||[]).forEach(w=>{if(/^\s+$/.test(w)){sp=true;return}if(sp||!U.length)U.push([]);U[U.length-1].push({k:w,b:g.b});sp=false}));
+    x.font=F(0);const spW=x.measureText(" ").width;
+    const wd=U.map(un=>un.reduce((a,k)=>{x.font=F(k.b);return a+x.measureText(k.k).width},0));
+    const rows=[];let cur=[],cw=0;
+    U.forEach((un,i)=>{const add=(cur.length?spW:0)+wd[i];if(cur.length&&cw+add>TW-ind){rows.push(cur);cur=[];cw=0}cw+=(cur.length?spW:0)+wd[i];cur.push(un)});
+    rows.push(cur);
+    rows.forEach((r,i)=>{let cx=X0+ind;r.forEach((un,j)=>{if(j)cx+=spW;un.forEach(k=>{x.font=F(k.b);x.fillText(k.k,cx,y+i*lh);cx+=x.measureText(k.k).width})})});
+    y+=rows.length*lh;
   };
-  m.paras.forEach(p=>{if(p.gap)y+=3*u;wrap(p.t,2.15);y+=2.4*u});
+  m.paras.forEach(p=>{wrap(p.s,2.15);y+=2.4*u});
   m.notes.forEach(n=>{wrap(n.t,1.7);y+=1.2*u;n.b.forEach(b=>{wrap("-\u00a0\u00a0\u00a0\u00a0"+b,1.7,5*u);y+=1.2*u})});
   y+=5*u;
   const pos=$("sigPos").value;let w,h;
