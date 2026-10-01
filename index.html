@@ -35,6 +35,14 @@ small{color:#666}
 #doc .b{margin:0 0 1.2cqw 5cqw;font-size:1.7cqw}
 #doc .sig{margin-top:5cqw;font-family:Arial,sans-serif;font-size:2.15cqw}
 #doc .sig img{max-height:9cqw;max-width:30cqw}
+@media print{
+@page{size:A4;margin:0}
+body{background:#fff}
+form{display:none}
+.wrap{display:block;padding:0;max-width:none}
+#paper{border:0;box-shadow:none;max-width:none;width:210mm;height:297mm;aspect-ratio:auto;margin:0}
+#paper img{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
 </style>
 </head>
 <body>
@@ -68,7 +76,10 @@ small{color:#666}
   <small>La signature est mémorisée sur cet ordinateur et modifiable à tout moment.</small><br>
   <button type="button" class="link" id="clr">Retirer l'image</button>
 
-  <button type="button" class="main" id="dl">Télécharger pour Google Docs (.docx)</button>
+  <button type="button" class="main" id="pdf">Télécharger en PDF</button>
+  <small>Dans la fenêtre qui s'ouvre, choisissez « Enregistrer au format PDF » comme imprimante.</small>
+  <button type="button" class="main" id="png" style="background:#fff;color:var(--wine)">Télécharger en image (PNG)</button>
+  <button type="button" class="main" id="dl" style="background:#fff;color:var(--wine)">Télécharger pour Google Docs (.docx)</button>
   <small>Dans Google Drive : importez le fichier, puis « Ouvrir avec Google Docs ».</small>
 </form>
 
@@ -187,6 +198,40 @@ $("add").onclick=()=>{addArt();render()};
 $("clr").onclick=()=>{sigData="";$("sigImg").value="";render()};
 $("sigImg").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{sigData=r.result;render()};r.readAsDataURL(f)};
 $("f").addEventListener("input",render);
+async function png(){
+  const m=model(),W=1240,u=W/100,c=document.createElement("canvas");c.width=W;c.height=7000;
+  const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,W,7000);x.textBaseline="top";
+  const load=s=>new Promise((ok,ko)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=ko;i.src=s});
+  const bi=await load(BANNER),bh=W*bi.naturalHeight/bi.naturalWidth;
+  x.drawImage(bi,0,0,W,bh);
+  const X0=12.5*u,TW=75*u;let y=bh+6*u;
+  const wrap=(t,s,ind=0)=>{
+    x.font=`${s*u}px Arial, sans-serif`;x.fillStyle="#111";
+    const lh=s*u*1.45,rows=[];let l="";
+    t.split(" ").forEach(k=>{const q=l?l+" "+k:k;if(l&&x.measureText(q).width>TW-ind){rows.push(l);l=k}else l=q});
+    rows.push(l);rows.forEach((r,i)=>x.fillText(r,X0+ind,y+i*lh));y+=rows.length*lh;
+  };
+  m.paras.forEach(p=>{if(p.gap)y+=3*u;wrap(p.t,2.15);y+=2.4*u});
+  m.notes.forEach(n=>{wrap(n.t,1.7);y+=1.2*u;n.b.forEach(b=>{wrap("-\u00a0\u00a0\u00a0\u00a0"+b,1.7,5*u);y+=1.2*u})});
+  y+=5*u;
+  const pos=$("sigPos").value;let w,h;
+  const px=w=>pos==="left"?X0:pos==="center"?X0+(TW-w)/2:X0+TW-w;
+  if(sigData){
+    const si=await load(sigData),k=Math.min(9*u/si.naturalHeight,30*u/si.naturalWidth);
+    w=si.naturalWidth*k;h=si.naturalHeight*k;x.drawImage(si,px(w),y,w,h);y+=h;
+  }else{
+    x.font=`${2.15*u}px Arial, sans-serif`;x.fillStyle="#111";
+    w=x.measureText($("sigTxt").value).width;x.fillText($("sigTxt").value,px(w),y);y+=2.15*u*1.45;
+  }
+  const fh=Math.max(1754,Math.ceil(y+8*u)),o=document.createElement("canvas");
+  o.width=W;o.height=fh;o.getContext("2d").drawImage(c,0,0,W,fh,0,0,W,fh);
+  const blob=await new Promise(r=>o.toBlob(r,"image/png"));
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download=`Lettre_licenciement_${($("nom").value+"_"+$("pre").value).trim().replace(/\s+/g,"_")}.png`;
+  a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+$("png").onclick=()=>png().catch(e=>alert("Export impossible : "+e.message));
+$("pdf").onclick=()=>{const t=document.title;document.title="Lettre_licenciement_"+($("nom").value+"_"+$("pre").value).trim().replace(/\s+/g,"_");render();window.print();document.title=t};
 $("dl").onclick=()=>build().catch(e=>alert("Export impossible : "+e.message));
 render();
 </script>
