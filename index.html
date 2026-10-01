@@ -57,8 +57,8 @@ form{display:none}
     <div><label for="date">Date de la décision</label><input id="date" type="date"></div>
   </div>
   <div class="row">
-    <div><label for="nom">Nom</label><input id="nom" value="Baskerville"></div>
-    <div><label for="pre">Prénom</label><input id="pre" value="Rowan"></div>
+    <div><label for="nom">Nom</label><input id="nom" placeholder="Nom"></div>
+    <div><label for="pre">Prénom</label><input id="pre" placeholder="Prénom"></div>
   </div>
   <label for="date2">Date de fin de contrat</label>
   <input id="date2" type="date">
@@ -114,7 +114,7 @@ const arts=(box=$("arts"))=>[...box.querySelectorAll(".art")].map(r=>({n:r.query
 
 function model(){
   const civ=$("civ").value,nom=$("nom").value.trim()||"…",pre=$("pre").value.trim()||"…";
-  const d1=fmt($("date").value||today()),d2=fmt($("date2").value||$("date").value||today());
+  const d1=$("date").value?fmt($("date").value):"JJ/MM/AAAA",d2=$("date2").value?fmt($("date2").value):"JJ/MM/AAAA";
   const A=arts(),S=arts($("secs")),T=t=>({t}),B=t=>({t,b:1});
   const list=its=>its.reduce((o,it,i)=>[...o,T(i?(i===its.length-1?" et ":", "):""),...it],[]);
   const aIt=A.map(a=>[B(`l'article ${a.n}`),T("*")]);
@@ -148,9 +148,7 @@ function render(){
   try{localStorage.setItem("sa_sig",JSON.stringify({txt:$("sigTxt").value,img:sigData,pos:$("sigPos").value}))}catch(e){}
 }
 
-$("date").value=today();$("date2").value=today();let d2edited=false;
-$("date2").addEventListener("input",()=>{d2edited=true});
-$("date").addEventListener("input",()=>{if(!d2edited)$("date2").value=$("date").value});
+
 addArt("17","Obligations de l'employé","Exécuter ses missions");
 addArt("31","licenciement","inactivité");
 try{const s=JSON.parse(localStorage.getItem("sa_sig")||"null");if(s){$("sigTxt").value=s.txt||"";sigData=s.img||"";if(s.pos)$("sigPos").value=s.pos}}catch(e){}
@@ -199,11 +197,11 @@ async function png(){
   o.width=W;o.height=fh;o.getContext("2d").drawImage(c,0,0,W,fh,0,0,W,fh);
   const jpg=$("fmt").value==="jpg",blob=await new Promise(r=>o.toBlob(r,jpg?"image/jpeg":"image/png",0.95));
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
-  a.download=`Lettre_licenciement_${($("nom").value+"_"+$("pre").value).trim().replace(/\s+/g,"_")}.${jpg?"jpg":"png"}`;
+  a.download=`Lettre_licenciement_${[$("nom").value,$("pre").value].map(v=>v.trim()).filter(Boolean).join("_").replace(/\s+/g,"_")}.${jpg?"jpg":"png"}`;
   a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
 $("png").onclick=()=>png().catch(e=>alert("Export impossible : "+e.message));
-$("pdf").onclick=()=>{const t=document.title;document.title="Lettre_licenciement_"+($("nom").value+"_"+$("pre").value).trim().replace(/\s+/g,"_");render();window.print();document.title=t};
+$("pdf").onclick=()=>{const t=document.title;document.title="Lettre_licenciement_"+[$("nom").value,$("pre").value].map(v=>v.trim()).filter(Boolean).join("_").replace(/\s+/g,"_");render();window.print();document.title=t};
 render();
 </script>
 </body>
