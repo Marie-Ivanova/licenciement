@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mairie de San Andreas – Lettres de licenciement</title>
-<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.js"></script>
 <style>
 :root{--navy:#0b2447;--wine:#4a0e14;--bg:#f3f1ee;--ink:#1d1d1f;--line:#d8d4ce}
 *{box-sizing:border-box}
@@ -124,29 +123,60 @@ function render(){
   try{localStorage.setItem("sa_sig",JSON.stringify({txt:$("sigTxt").value,img:sigData,pos:$("sigPos").value}))}catch(e){}
 }
 
+//ZIPSTART
+const crcT=(()=>{const t=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+const crc=b=>{let c=-1;for(let i=0;i<b.length;i++)c=crcT[(c^b[i])&255]^(c>>>8);return (~c)>>>0};
+function zip(files,type){
+  const enc=new TextEncoder(),parts=[],cen=[];let off=0;
+  const u16=v=>[v&255,(v>>8)&255],u32=v=>[v&255,(v>>8)&255,(v>>16)&255,(v>>>24)&255];
+  for(const f of files){
+    const n=enc.encode(f.n),c=crc(f.d),z=f.d.length;
+    const h=new Uint8Array([0x50,0x4b,3,4,...u16(20),...u16(0),...u16(0),...u16(0),...u16(0x21),...u32(c),...u32(z),...u32(z),...u16(n.length),...u16(0)]);
+    parts.push(h,n,f.d);
+    cen.push(new Uint8Array([0x50,0x4b,1,2,...u16(20),...u16(20),...u16(0),...u16(0),...u16(0),...u16(0x21),...u32(c),...u32(z),...u32(z),...u16(n.length),...u16(0),...u16(0),...u16(0),...u16(0),...u32(0),...u32(off)]),n);
+    off+=h.length+n.length+z;
+  }
+  const cl=cen.reduce((a,b)=>a+b.length,0);
+  const e=new Uint8Array([0x50,0x4b,5,6,0,0,0,0,...u16(files.length),...u16(files.length),...u32(cl),...u32(off),0,0]);
+  return new Blob([...parts,...cen,e],{type});
+}
+//ZIPEND
+
 async function build(){
-  const D=docx,m=model(),F="Arial",L=1500;
+  const m=model(),L=1500,W=11906,E=635,enc=new TextEncoder();
   const bin=u=>Uint8Array.from(atob(u.split(",")[1]),c=>c.charCodeAt(0));
-  const dim=u=>new Promise(r=>{const i=new Image();i.onload=()=>r([i.naturalWidth,i.naturalHeight]);i.src=u});
-  const [bw,bh]=await dim(BANNER);
-  const kids=[new D.Paragraph({spacing:{after:600},children:[new D.ImageRun({type:"png",data:bin(BANNER),transformation:{width:794,height:Math.round(794*bh/bw)}})]})];
-  const run=(t,s=21,o={})=>new D.TextRun({text:t,font:F,size:s,...o});
-  m.paras.forEach(p=>kids.push(new D.Paragraph({indent:{left:L,right:L},spacing:{before:p.gap?500:0,after:260,line:300},children:[run(p.t)]})));
+  const load=u=>new Promise((ok,ko)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=ko;i.src=u});
+  const bi=await load(BANNER);
+  let sg=null;
+  if(sigData){const i=await load(sigData),c=document.createElement("canvas");c.width=i.naturalWidth;c.height=i.naturalHeight;c.getContext("2d").drawImage(i,0,0);sg={u:c.toDataURL("image/png"),w:i.naturalWidth,h:i.naturalHeight}}
+  const rpr=s=>`<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:sz w:val="${s}"/></w:rPr>`;
+  const txt=(t,s=21)=>`<w:r>${rpr(s)}<w:t xml:space="preserve">${esc(t)}</w:t></w:r>`;
+  const img=(id,cx,cy)=>`<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${id}" name="img${id}"/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="${id}" name="img${id}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId${id}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`;
+  const par=(inner,o={})=>`<w:p><w:pPr><w:spacing w:before="${o.b||0}" w:after="${o.a||0}" w:line="${o.l||240}" w:lineRule="auto"/><w:ind w:left="${o.il||0}" w:right="${o.ir||0}"/><w:jc w:val="${o.j||"left"}"/></w:pPr>${inner}</w:p>`;
+  let body=par(img(1,W*E,Math.round(W*E*bi.naturalHeight/bi.naturalWidth)),{a:600});
+  m.paras.forEach(p=>body+=par(txt(p.t),{b:p.gap?500:0,a:260,l:300,il:L,ir:L}));
   m.notes.forEach(n=>{
-    kids.push(new D.Paragraph({indent:{left:L,right:L},spacing:{before:80,after:120},children:[run(n.t,16)]}));
-    n.b.forEach(b=>kids.push(new D.Paragraph({indent:{left:L+700,right:L},spacing:{after:120},children:[run("-    "+b,16)]})));
+    body+=par(txt(n.t,16),{b:80,a:120,il:L,ir:L});
+    n.b.forEach(b=>body+=par(txt("-    "+b,16),{a:120,il:L+700,ir:L}));
   });
-  let sig;
-  if(sigData){const[w,h]=await dim(sigData),H=70;
-    sig=new D.ImageRun({type:sigData.includes("jpeg")?"jpg":"png",data:bin(sigData),transformation:{width:Math.round(H*w/h),height:H}});}
-  else sig=new D.TextRun({text:$("sigTxt").value,font:F,size:21});
-  const al={left:D.AlignmentType.LEFT,center:D.AlignmentType.CENTER,right:D.AlignmentType.RIGHT}[$("sigPos").value];
-  kids.push(new D.Paragraph({alignment:al,indent:{left:L,right:L},spacing:{before:700},children:[sig]}));
-  const doc=new D.Document({sections:[{properties:{page:{size:{width:11906,height:16838},margin:{top:0,right:0,bottom:700,left:0}}},children:kids}]});
-  const blob=await D.Packer.toBlob(doc);
+  const H=70*9525;
+  body+=par(sg?img(2,Math.round(H*sg.w/sg.h),H):txt($("sigTxt").value),{b:700,il:L,ir:L,j:$("sigPos").value});
+  const X='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  const docXml=X+`<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><w:body>${body}<w:sectPr><w:pgSz w:w="${W}" w:h="16838"/><w:pgMar w:top="0" w:right="0" w:bottom="700" w:left="0" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>`;
+  const R="http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+  const rels=X+`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${R}/image" Target="media/img1.png"/>${sg?`<Relationship Id="rId2" Type="${R}/image" Target="media/img2.png"/>`:""}</Relationships>`;
+  const files=[
+    {n:"[Content_Types].xml",d:enc.encode(X+`<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`)},
+    {n:"_rels/.rels",d:enc.encode(X+`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`)},
+    {n:"word/document.xml",d:enc.encode(docXml)},
+    {n:"word/_rels/document.xml.rels",d:enc.encode(rels)},
+    {n:"word/media/img1.png",d:bin(BANNER)}
+  ];
+  if(sg)files.push({n:"word/media/img2.png",d:bin(sg.u)});
+  const blob=zip(files,"application/vnd.openxmlformats-officedocument.wordprocessingml.document");
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
   const nm=($("nom").value+"_"+$("pre").value).trim().replace(/\s+/g,"_");
-  a.download=`Lettre_licenciement_${nm}.docx`;a.click();URL.revokeObjectURL(a.href);
+  a.download=`Lettre_licenciement_${nm}.docx`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
 
 $("date").value=today();
@@ -157,7 +187,7 @@ $("add").onclick=()=>{addArt();render()};
 $("clr").onclick=()=>{sigData="";$("sigImg").value="";render()};
 $("sigImg").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{sigData=r.result;render()};r.readAsDataURL(f)};
 $("f").addEventListener("input",render);
-$("dl").onclick=()=>{if(!window.docx){alert("La bibliothèque d'export n'a pas pu se charger. Vérifiez votre connexion internet.");return}build()};
+$("dl").onclick=()=>build().catch(e=>alert("Export impossible : "+e.message));
 render();
 </script>
 </body>
