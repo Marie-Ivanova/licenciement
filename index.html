@@ -76,10 +76,11 @@ form{display:none}
   <small>La signature est mémorisée sur cet ordinateur et modifiable à tout moment.</small><br>
   <button type="button" class="link" id="clr">Retirer l'image</button>
 
-  <button type="button" class="main" id="pdf">Télécharger en PDF</button>
-  <small>Dans la fenêtre qui s'ouvre, choisissez « Enregistrer au format PDF » comme imprimante.</small>
-  <button type="button" class="main" id="png" style="background:#fff;color:var(--wine)">Télécharger en image (PNG)</button>
-  <button type="button" class="main" id="dl" style="background:#fff;color:var(--wine)">Télécharger pour Google Docs (.docx)</button>
+  <label for="fmt">Format de l'image</label>
+  <select id="fmt"><option value="png">PNG (qualité maximale)</option><option value="jpg">JPG (fichier plus léger)</option></select>
+  <button type="button" class="main" id="png">Télécharger l'image</button>
+  <button type="button" class="main" id="pdf" style="background:#fff;color:var(--wine);margin-top:8px">Télécharger en PDF</button>
+  <small>PDF : choisissez « Enregistrer au format PDF » dans la fenêtre d'impression.</small>
   <small>Dans Google Drive : importez le fichier, puis « Ouvrir avec Google Docs ».</small>
 </form>
 
@@ -134,62 +135,6 @@ function render(){
   try{localStorage.setItem("sa_sig",JSON.stringify({txt:$("sigTxt").value,img:sigData,pos:$("sigPos").value}))}catch(e){}
 }
 
-//ZIPSTART
-const crcT=(()=>{const t=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
-const crc=b=>{let c=-1;for(let i=0;i<b.length;i++)c=crcT[(c^b[i])&255]^(c>>>8);return (~c)>>>0};
-function zip(files,type){
-  const enc=new TextEncoder(),parts=[],cen=[];let off=0;
-  const u16=v=>[v&255,(v>>8)&255],u32=v=>[v&255,(v>>8)&255,(v>>16)&255,(v>>>24)&255];
-  for(const f of files){
-    const n=enc.encode(f.n),c=crc(f.d),z=f.d.length;
-    const h=new Uint8Array([0x50,0x4b,3,4,...u16(20),...u16(0),...u16(0),...u16(0),...u16(0x21),...u32(c),...u32(z),...u32(z),...u16(n.length),...u16(0)]);
-    parts.push(h,n,f.d);
-    cen.push(new Uint8Array([0x50,0x4b,1,2,...u16(20),...u16(20),...u16(0),...u16(0),...u16(0),...u16(0x21),...u32(c),...u32(z),...u32(z),...u16(n.length),...u16(0),...u16(0),...u16(0),...u16(0),...u32(0),...u32(off)]),n);
-    off+=h.length+n.length+z;
-  }
-  const cl=cen.reduce((a,b)=>a+b.length,0);
-  const e=new Uint8Array([0x50,0x4b,5,6,0,0,0,0,...u16(files.length),...u16(files.length),...u32(cl),...u32(off),0,0]);
-  return new Blob([...parts,...cen,e],{type});
-}
-//ZIPEND
-
-async function build(){
-  const m=model(),L=1500,W=11906,E=635,enc=new TextEncoder();
-  const bin=u=>Uint8Array.from(atob(u.split(",")[1]),c=>c.charCodeAt(0));
-  const load=u=>new Promise((ok,ko)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=ko;i.src=u});
-  const bi=await load(BANNER);
-  let sg=null;
-  if(sigData){const i=await load(sigData),c=document.createElement("canvas");c.width=i.naturalWidth;c.height=i.naturalHeight;c.getContext("2d").drawImage(i,0,0);sg={u:c.toDataURL("image/png"),w:i.naturalWidth,h:i.naturalHeight}}
-  const rpr=s=>`<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:sz w:val="${s}"/></w:rPr>`;
-  const txt=(t,s=21)=>`<w:r>${rpr(s)}<w:t xml:space="preserve">${esc(t)}</w:t></w:r>`;
-  const img=(id,cx,cy)=>`<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${id}" name="img${id}"/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="${id}" name="img${id}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId${id}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`;
-  const par=(inner,o={})=>`<w:p><w:pPr><w:spacing w:before="${o.b||0}" w:after="${o.a||0}" w:line="${o.l||240}" w:lineRule="auto"/><w:ind w:left="${o.il||0}" w:right="${o.ir||0}"/><w:jc w:val="${o.j||"left"}"/></w:pPr>${inner}</w:p>`;
-  let body=par(img(1,W*E,Math.round(W*E*bi.naturalHeight/bi.naturalWidth)),{a:600});
-  m.paras.forEach(p=>body+=par(txt(p.t),{b:p.gap?500:0,a:260,l:300,il:L,ir:L}));
-  m.notes.forEach(n=>{
-    body+=par(txt(n.t,16),{b:80,a:120,il:L,ir:L});
-    n.b.forEach(b=>body+=par(txt("-    "+b,16),{a:120,il:L+700,ir:L}));
-  });
-  const H=70*9525;
-  body+=par(sg?img(2,Math.round(H*sg.w/sg.h),H):txt($("sigTxt").value),{b:700,il:L,ir:L,j:$("sigPos").value});
-  const X='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
-  const docXml=X+`<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><w:body>${body}<w:sectPr><w:pgSz w:w="${W}" w:h="16838"/><w:pgMar w:top="0" w:right="0" w:bottom="700" w:left="0" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr></w:body></w:document>`;
-  const R="http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-  const rels=X+`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${R}/image" Target="media/img1.png"/>${sg?`<Relationship Id="rId2" Type="${R}/image" Target="media/img2.png"/>`:""}</Relationships>`;
-  const files=[
-    {n:"[Content_Types].xml",d:enc.encode(X+`<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`)},
-    {n:"_rels/.rels",d:enc.encode(X+`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`)},
-    {n:"word/document.xml",d:enc.encode(docXml)},
-    {n:"word/_rels/document.xml.rels",d:enc.encode(rels)},
-    {n:"word/media/img1.png",d:bin(BANNER)}
-  ];
-  if(sg)files.push({n:"word/media/img2.png",d:bin(sg.u)});
-  const blob=zip(files,"application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
-  const nm=($("nom").value+"_"+$("pre").value).trim().replace(/\s+/g,"_");
-  a.download=`Lettre_licenciement_${nm}.docx`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-}
-
 $("date").value=today();
 addArt("17","Obligations de l'employé","Exécuter ses missions");
 addArt("31","licenciement","inactivité");
@@ -199,8 +144,8 @@ $("clr").onclick=()=>{sigData="";$("sigImg").value="";render()};
 $("sigImg").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{sigData=r.result;render()};r.readAsDataURL(f)};
 $("f").addEventListener("input",render);
 async function png(){
-  const m=model(),W=1240,u=W/100,c=document.createElement("canvas");c.width=W;c.height=7000;
-  const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,W,7000);x.textBaseline="top";
+  const m=model(),W=2480,H=10524,u=W/100,c=document.createElement("canvas");c.width=W;c.height=H;
+  const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,W,H);x.textBaseline="top";x.imageSmoothingQuality="high";
   const load=s=>new Promise((ok,ko)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=ko;i.src=s});
   const bi=await load(BANNER),bh=W*bi.naturalHeight/bi.naturalWidth;
   x.drawImage(bi,0,0,W,bh);
@@ -223,16 +168,15 @@ async function png(){
     x.font=`${2.15*u}px Arial, sans-serif`;x.fillStyle="#111";
     w=x.measureText($("sigTxt").value).width;x.fillText($("sigTxt").value,px(w),y);y+=2.15*u*1.45;
   }
-  const fh=Math.max(1754,Math.ceil(y+8*u)),o=document.createElement("canvas");
+  const fh=Math.max(3508,Math.ceil(y+8*u)),o=document.createElement("canvas");
   o.width=W;o.height=fh;o.getContext("2d").drawImage(c,0,0,W,fh,0,0,W,fh);
-  const blob=await new Promise(r=>o.toBlob(r,"image/png"));
+  const jpg=$("fmt").value==="jpg",blob=await new Promise(r=>o.toBlob(r,jpg?"image/jpeg":"image/png",0.95));
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
-  a.download=`Lettre_licenciement_${($("nom").value+"_"+$("pre").value).trim().replace(/\s+/g,"_")}.png`;
+  a.download=`Lettre_licenciement_${($("nom").value+"_"+$("pre").value).trim().replace(/\s+/g,"_")}.${jpg?"jpg":"png"}`;
   a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
 $("png").onclick=()=>png().catch(e=>alert("Export impossible : "+e.message));
 $("pdf").onclick=()=>{const t=document.title;document.title="Lettre_licenciement_"+($("nom").value+"_"+$("pre").value).trim().replace(/\s+/g,"_");render();window.print();document.title=t};
-$("dl").onclick=()=>build().catch(e=>alert("Export impossible : "+e.message));
 render();
 </script>
 </body>
